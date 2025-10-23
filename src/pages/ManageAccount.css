@@ -1,0 +1,238 @@
+.manage-container {
+  max-width: 1400px;
+  width: 100%;
+  margin-top: 70px;
+  margin: 80px auto 30px;
+  padding: 20px;
+  background: #fdfdfd;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  margin-bottom: 30px;
+}
+html {
+  scroll-behavior: smooth;
+}
+
+.manage-container h2 {
+  font-size: 28px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.user-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 30px;
+}
+
+.user-form input,
+.user-form select {
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.user-form button[type='submit'] {
+  padding: 12px;
+  background-color: #28a745;
+  color: white;
+  font-size: 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.user-form button[type='submit']:hover {
+  background-color: #218838;
+}
+
+.restrictions label {
+  font-weight: bold;
+  margin-top: 10px;
+}
+
+.subject-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.subject-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #e6f0ff;
+  padding: 6px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.custom-subject-input {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.custom-subject-input input {
+  flex: 1;
+}
+
+.custom-subject-input button {
+  padding: 8px 50px;
+  height: 70%;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.custom-subject-input button:hover {
+  background-color: #218838;
+}
+
+.subject-list {
+  margin-top: 10px;
+  list-style: none;
+  padding: 0;
+  width: 100%;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.subject-list li {
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f1f1f1;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.subject-list li button {
+  background: transparent;
+  border: none;
+  font-size: 15px;
+  font-weight: bold;
+  color: #dc3545;
+  cursor: pointer;
+}
+.subject-list li button:hover {
+  color: #c82333;
+}
+
+.user-list {
+  margin-top: 20px;
+}
+
+.user-list h3 {
+  margin-bottom: 10px;
+  font-size: 22px;
+color: #218838;
+
+}
+
+.user-list ul {
+  list-style: none;
+  padding: 0;
+}
+
+.user-list li {
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 6px;
+}
+
+.user-list button {
+  margin-right: 10px;
+  padding: 6px 12px;
+  background-color: #ffc107;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.user-list button:last-child {
+  background-color: #dc3545;
+  color: white;
+}
+
+.user-list button:hover {
+  opacity: 0.9;
+}
+
+.access-summary {
+  margin-top: 5px;
+  font-size: 14px;
+  color: #555;
+}
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.checkbox-group label {
+  background-color: #f0f4f8;
+  border: 1px solid #ccc;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.checkbox-group input[type='checkbox'] {
+  margin-right: 6px;
+  accent-color: #2b6cb0;
+}
+
+/* Optional: Enhance hover effect */
+.checkbox-group label:hover {
+  background-color: #e0eaf3;
+  border-color: #888;
+}
+
+/* ---------- Responsive for Mobile ---------- */
+@media (max-width: 768px) {
+  .manage-container {
+    padding: 15px;
+    margin: 60px 10px 30px;
+  }
+
+  .user-form,
+  .custom-subject-input {
+    flex-direction: column;
+  }
+
+  .subject-options {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .custom-subject-input button {
+    width: 100%;
+  }
+
+  .user-list li {
+    font-size: 15px;
+  }
+
+  .user-list button {
+    display: block;
+    width: 100%;
+    margin: 6px 0 0;
+  }
+}
