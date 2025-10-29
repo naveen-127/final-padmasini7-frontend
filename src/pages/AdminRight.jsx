@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { Pencil, Trash2 } from 'lucide-react';
-import katex from 'katex';
-import parse from 'html-react-parser';
+import { Pencil, Trash2 }                     from 'lucide-react';
+import katex                                  from 'katex';
+import parse                                  from 'html-react-parser';
 import 'katex/dist/katex.min.css';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL }                       from '../config';
+import { FaCheckCircle }                      from "react-icons/fa";
+
+
 
 
 
@@ -76,6 +79,8 @@ const AdminRight = () => {
   });
 
 
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [topic, setTopic] = useState('');
   const [selectedSubtopic, setSelectedSubtopic] = useState(null);
   const [editingSubtopicIndex, setEditingSubtopicIndex] = useState(null);
@@ -83,7 +88,7 @@ const AdminRight = () => {
   const [showTestForm, setShowTestForm] = useState(false);
   const [subTitle, setSubTitle] = useState('');
   const [subDesc, setSubDesc] = useState('');
-  const [rootUnitId, setRootUnitId] = useState(null);
+  const [rootId, setRootId] = useState(null);
   const [recordedVoiceFiles, setRecordedVoiceFiles] = useState([]);
   const [uploadedVoiceFiles, setUploadedVoiceFiles] = useState([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -98,7 +103,7 @@ const AdminRight = () => {
     const saved = localStorage.getItem(`admin_testsMap_${keyPrefix}`);
     return saved ? JSON.parse(saved) : {};
   });
-  const [selectedTest, setSelectedTest] = useState(null);
+  const [selectedTest, setSelectedTest] = useState("");
   const [testName, setTestName] = useState('');
   const [editingTestIndex, setEditingTestIndex] = useState(null);
   const [testTimeLimit, setTestTimeLimit] = useState('');
@@ -107,6 +112,12 @@ const AdminRight = () => {
   const [passPercentage, setPassPercentage] = useState('');
   const [selectedLesson, setSelectedLesson] = useState(null);
 
+  const [formData, setFormData] = useState({
+    topic: "",
+    subtopic: "",
+    description: "",
+    questionsList: [],
+  });
   useEffect(() => {
     localStorage.setItem(`admin_unitsMap_${keyPrefix}`, JSON.stringify(unitsMap));
   }, [unitsMap]);
@@ -167,6 +178,30 @@ const AdminRight = () => {
     // solutionText:''
 
   });
+
+  const emptyQuestion = {
+    text: "",
+    questionImages: [],
+    options: [
+      { text: "", image: null },
+      { text: "", image: null },
+      { text: "", image: null },
+      { text: "", image: null },
+    ],
+    correctIndex: null,
+    explanation: "",
+    solutionImages: [],
+    rows: 0,
+    cols: 0,
+    tableData: [],
+    showMatches: false,
+    tableEditable: false,
+    showQuestionInput: false,
+    showSolutionInput: false,
+  };
+
+
+
   const handleStartRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -394,86 +429,73 @@ const AdminRight = () => {
   const API_BASE_URL3 = `${API_BASE_URL}/api`;
 
   // -----------------------------
-  // 🟩 Add Subtopic - Clean & Complete Version
+  // 🟩 Add Subtopic - Full Working Version
   // -----------------------------
   const handleAddSubtopic = async (e) => {
     e?.preventDefault();
 
+    // -----------------------------
     // Validation
+    // -----------------------------
     if (!selectedUnit || !subTitle.trim()) {
       alert("Please select a lesson and enter a subtopic title");
       return;
     }
 
     if (!lastClicked) {
-      alert("Error: Missing unit reference. Please select a unit first.");
+      alert("Error: Missing parent unit reference. Please select a unit first.");
       return;
     }
 
     try {
       console.log("🔄 Starting subtopic creation process...");
 
-      // 🖼️ Upload images
+      // -----------------------------
+      // Upload images
+      // -----------------------------
       const imageUrls = [];
       if (currentQuestion?.image?.length > 0) {
-        console.log(`📸 Uploading ${currentQuestion.image.length} images...`);
-
         for (const img of currentQuestion.image) {
-          try {
-            const imageUrl = await uploadFileToBackend1(img, "subtopics/images");
-            if (imageUrl) {
-              imageUrls.push(imageUrl);
-              console.log("✅ Image uploaded:", imageUrl);
-            }
-          } catch (error) {
-            console.error("❌ Image upload failed:", error);
-            // Continue with other images even if one fails
-          }
+          const imageUrl = await uploadFileToBackend1(img, "subtopics/images");
+          if (imageUrl) imageUrls.push(imageUrl);
         }
       }
 
-      // 🎤 Upload audio files
+      // -----------------------------
+      // Upload audio files
+      // -----------------------------
       const audioFileIds = [];
       const allAudios = [...(recordedVoiceFiles || []), ...(uploadedVoiceFiles || [])];
-
-      if (allAudios.length > 0) {
-        console.log(`🎵 Uploading ${allAudios.length} audio files...`);
-
-        for (const audioFile of allAudios) {
-          try {
-            const audioUrl = await uploadFileToBackend1(audioFile, "subtopics/audios");
-            if (audioUrl) {
-              audioFileIds.push(audioUrl);
-              console.log("✅ Audio uploaded:", audioUrl);
-            }
-          } catch (error) {
-            console.error("❌ Audio upload failed:", error);
-            // Continue with other audio files even if one fails
-          }
-        }
+      for (const audioFile of allAudios) {
+        const audioUrl = await uploadFileToBackend1(audioFile, "subtopics/audios");
+        if (audioUrl) audioFileIds.push(audioUrl);
       }
 
-      // 🧩 Create payload for Spring Boot backend
+      // -----------------------------
+      // Payload for backend
+      // -----------------------------
       const payload = {
-        parentId: lastClicked,                    // The immediate parent unit ID
-        rootUnitId: lastClicked,                  // Root unit ID (same as parent for direct children)
+        parentId: lastClicked,       // Immediate parent unit ID
+        rootId: firstClicked,  // Root lesson ID
         dbname: courseName,
         subjectName: subjectName,
         unitName: subTitle.trim(),
         explanation: subDesc.trim(),
         imageUrls: imageUrls,
         audioFileId: audioFileIds,
-        aiVideoUrl: "", // Initially empty - will be updated after AI video generation
+        aiVideoUrl: "",              // Initially empty
         standard: standard
       };
 
-      console.log("📤 Sending subtopic payload to Spring Boot:", payload);
+      console.log("📤 Sending payload:", payload);
 
-      // 🚀 Send to Spring Boot backend
+      // -----------------------------
+      // Call backend
+      // -----------------------------
       const res = await fetch(`${API_BASE_URL3}/addSubtopic`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
 
       if (!res.ok) {
@@ -482,86 +504,85 @@ const AdminRight = () => {
       }
 
       const result = await res.json();
-      console.log("✅ Spring Boot response:", result);
+      console.log("✅ Backend response:", result);
 
-      // ✅ Store the inserted ID for AI video page
       const insertedId = result.insertedSubId || result.insertedId;
-      if (insertedId) {
-        localStorage.setItem("lastInsertedSubtopicId", insertedId);
-        console.log("💾 Stored subtopic ID for AI video:", insertedId);
-      } else {
-        console.warn("⚠️ No inserted ID returned from backend");
+      if (!insertedId) {
+        alert("⚠️ Subtopic not inserted. Check backend logs.");
+        return;
       }
 
-      // ✅ Update local UI state
+      localStorage.setItem("lastInsertedSubtopicId", insertedId);
+
+      // -----------------------------
+      // Update frontend tree
+      // -----------------------------
       const newSub = {
-        id: insertedId || `temp-${Date.now()}`,
+        id: insertedId,
         unitName: payload.unitName,
         explanation: payload.explanation,
         imageUrls: payload.imageUrls,
         audioFileId: payload.audioFileId,
         aiVideoUrl: payload.aiVideoUrl,
         parentId: payload.parentId,
+        children: []
       };
 
-      setLessonSubtopicsMap((prev) => {
+      setLessonSubtopicsMap(prev => {
         const current = prev[selectedUnit] || [];
-        return { ...prev, [selectedUnit]: [...current, newSub] };
+        return {
+          ...prev,
+          [selectedUnit]: updateSubtopicTree(current, payload.parentId, newSub)
+        };
       });
 
-      // ✅ Show success message
       alert("✅ Subtopic added successfully! You can now generate AI video.");
-
-      // ✅ Refresh data from backend
       getAllData();
 
     } catch (err) {
       console.error("❌ Error adding subtopic:", err);
-      alert(`Failed to add subtopic: ${err.message}\n\nCheck console for details.`);
+      alert(`Failed to add subtopic: ${err.message}`);
     }
   };
 
   // -----------------------------
-  // 🟩 Upload Helper Function
+  // Recursive frontend tree update
+  // -----------------------------
+  const updateSubtopicTree = (subtopics, parentId, newChild) => {
+    return subtopics.map(sub => {
+      if (sub.id === parentId) {
+        return { ...sub, children: [...(sub.children || []), newChild] };
+      } else if (sub.children && sub.children.length > 0) {
+        return { ...sub, children: updateSubtopicTree(sub.children, parentId, newChild) };
+      } else {
+        return sub;
+      }
+    });
+  };
+
+  // -----------------------------
+  // Upload helper function
   // -----------------------------
   const uploadFileToBackend1 = async (file, folderName = "uploads") => {
     if (!file) return null;
-
     try {
       const formData = new FormData();
       formData.append("file", file);
       formData.append("folderName", folderName);
 
-      console.log(`📤 Uploading file → ${file.name} to folder → ${folderName}`);
-
       const res = await fetch(`${API_BASE_URL3}/image/upload`, {
         method: "POST",
-        body: formData,
+        body: formData
       });
 
-      if (!res.ok) {
-        throw new Error(`Upload failed with status ${res.status}`);
-      }
-
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const data = await res.json();
-
-      if (!data.fileUrl) {
-        console.warn("⚠️ File URL missing in response");
-        return null;
-      }
-
-      console.log("✅ File uploaded successfully. URL:", data.fileUrl);
-      return data.fileUrl;
+      return data.fileUrl || null;
     } catch (err) {
       console.error("❌ Upload error:", err);
-      // Don't alert here - let the main function handle it
       return null;
     }
   };
-
-
-
-
 
 
 
@@ -655,22 +676,43 @@ const AdminRight = () => {
   const handleEditQuestion = (index) => {
     const q = questions[index];
 
-    setCurrentQuestion({
-      text: q.text || "",
-      image: q.image || null,
-      options: q.options.map(opt => {
 
-        if (typeof opt === "string") {
-          return { text: opt, image: null };
-        }
-        return {
-          text: opt.text || "",
-          image: opt.image || null
-        };
-      }),
-      correctIndex: q.correctIndex,
+
+    setCurrentQuestion({
+      // 🔹 Question text and image
+      text: q.text || "",
+      questionImages: q.questionImages || [],
+
+      // 🔹 Options (handles both string and object types safely)
+      options: Array.isArray(q.options)
+        ? q.options.map((opt) => ({
+          text: typeof opt === "string" ? opt : opt?.text || "",
+          image: typeof opt === "object" && opt?.image ? opt.image : null,
+        }))
+        : [
+          { text: "", image: null },
+          { text: "", image: null },
+          { text: "", image: null },
+          { text: "", image: null },
+        ],
+
+      // 🔹 Correct answer index (default 0)
+      correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : 0,
+
+      // 🔹 Explanation / solution text and image
       explanation: q.explanation || "",
+      solutionImages: q.solutionImages || [],
+
+      // 🔹 Table-related fields (if you have table-based questions)
+      rows: q.rows || 0,
+      cols: q.cols || 0,
+      tableData: q.tableData || [],
+
+      // 🔹 Matching / advanced question support (optional)
+      showMatches: q.showMatches || false,
+      tableEditable: q.tableEditable || false,
     });
+
 
     setEditingQuestionIndex(index);
   };
@@ -1055,8 +1097,56 @@ const AdminRight = () => {
   //   }
   // };
 
+  // Safe URL helper functions
+  const getSafeImageUrl = (image) => {
+    if (!image) return null;
+    if (typeof image === "string") return image;
+    if (image instanceof File || image instanceof Blob) {
+      try {
+        return URL.createObjectURL(image);
+      } catch (error) {
+        console.warn('Failed to create image object URL:', error);
+        return null;
+      }
+    }
+    return null;
+  };
+
+  const getSafeAudioUrl = (audioFile) => {
+    if (!audioFile) return null;
+    if (typeof audioFile === "string") return audioFile;
+    if (audioFile instanceof File || audioFile instanceof Blob) {
+      try {
+        return URL.createObjectURL(audioFile);
+      } catch (error) {
+        console.warn('Failed to create audio object URL:', error);
+        return null;
+      }
+    }
+    return null;
+  };
 
 
+  // Add this function to fetch specific test data
+  const fetchTestDetails = async (parentId, testName) => {
+    try {
+      // You need to create this endpoint in your backend
+      const res = await fetch(`${API_BASE_URL}/api/getTest/${parentId}/${testName}`, {
+        method: "GET",
+        credentials: "include"
+      });
+
+      if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
+      const testData = await res.json();
+      return testData;
+    } catch (err) {
+      console.error("Failed to fetch test details:", err);
+      return null;
+    }
+  };
+
+  // Also add this endpoint to your backend controller:
 
   const API_BASE_URL2 = `${API_BASE_URL}/api`;
 
@@ -1119,19 +1209,19 @@ const AdminRight = () => {
 
     return {
       question: q.text || "", // question text
-      questionImages: questionImageUrls.length > 0 ? questionImageUrls : ["NO_QUESTION_IMAGE"],
+      questionImages: questionImageUrls, // ✅ Return empty array instead of placeholder
 
       explanation: q.explanation || "", // ✅ solution text
-      solutionImages: solutionImageUrls.length > 0 ? solutionImageUrls : ["NO_SOLUTION_IMAGE"],
+      solutionImages: solutionImageUrls, // ✅ Return empty array instead of placeholder
 
       option1: processedOptions[0].text,
-      option1Image: processedOptions[0].image,
+      option1Image: processedOptions[0].image, // ✅ This will be null if no image
       option2: processedOptions[1].text,
-      option2Image: processedOptions[1].image,
+      option2Image: processedOptions[1].image, // ✅ This will be null if no image
       option3: processedOptions[2].text,
-      option3Image: processedOptions[2].image,
+      option3Image: processedOptions[2].image, // ✅ This will be null if no image
       option4: processedOptions[3].text,
-      option4Image: processedOptions[3].image,
+      option4Image: processedOptions[3].image, // ✅ This will be null if no image
 
       correctIndex: q.correctIndex || 0,
 
@@ -1161,9 +1251,9 @@ const AdminRight = () => {
 
       const testDatas = {
         dbname: courseName,
-        rootId: lastClicked,
+        rootId: firstClicked,
         parentId: lastClicked,
-        subjectName,
+        subjectName: subjectName,
         testName: testName.trim(),
         unitName: selectedUnit,
         marks: pass,
@@ -1193,6 +1283,19 @@ const AdminRight = () => {
       const data = await res.json();
       console.log("✅ Test submitted:", data);
 
+      // ✅ CRITICAL FIX: Update selectedTest with the processed data that has URLs
+      const updatedTest = {
+        testName: testName.trim(),
+        name: testName.trim(),
+        marks: pass,
+        passPercentage: pass,
+        questionsList: processedQuestions, // This contains the actual data with URLs
+        questions: processedQuestions // For compatibility
+      };
+      setSelectedTest(updatedTest);
+      console.log("✅ Updated selectedTest with processed data:", updatedTest);
+
+
       // ✅ Reset UI
       getAllData();
       setSelectedTest(null);
@@ -1209,42 +1312,87 @@ const AdminRight = () => {
     }
   };
 
+
   const handleUpdateTest = async () => {
-    if (!selectedUnit) return alert("Please select a lesson before updating the test.");
-    if (!testName.trim()) return alert("Please enter a test name.");
+    // 🔍 COMPREHENSIVE DEBUGGING
+    console.log("🔍 ========== UPDATE TEST DEBUG INFO ==========");
+    console.log("📋 Form Data:");
+    console.log("  - selectedUnit:", selectedUnit);
+    console.log("  - testName:", testName);
+    console.log("  - passPercentage:", passPercentage);
+    console.log("  - oldQuestionForDeletion:", oldQuestionForDeletion);
+    console.log("  - questions count:", questions?.length);
+    console.log("  - lastClicked:", lastClicked);
+    console.log("  - firstClicked:", firstClicked);
+    console.log("  - courseName:", courseName);
+    console.log("  - subjectName:", subjectName);
+    console.log("📋 Questions Data:", questions);
+
+    // Validation
+    if (!selectedUnit) {
+      alert("Please select a lesson before updating the test.");
+      return;
+    }
+
+    if (!testName.trim()) {
+      alert("Please enter a test name.");
+      return;
+    }
+
+    if (!oldQuestionForDeletion) {
+      alert("Cannot update test: Original test name not found.");
+      return;
+    }
 
     const pass = parseInt(passPercentage);
-    if (!pass || pass <= 0 || pass > 100)
-      return alert("Pass percentage must be between 1 and 100.");
-    if (!questions || questions.length === 0) return alert("Add at least one question before updating.");
+    if (!pass || pass <= 0 || pass > 100) {
+      alert("Pass percentage must be between 1 and 100.");
+      return;
+    }
+
+    if (!questions || questions.length === 0) {
+      alert("Add at least one question before updating.");
+      return;
+    }
 
     try {
+      console.log("🔄 Processing questions for upload...");
+
       // 🔹 Process all questions (upload images)
       const processedQuestions = [];
       for (const q of questions) {
-        const processed = await processQuestion(q); // reuse your existing processQuestion
+        const processed = await processQuestion(q);
         processedQuestions.push(processed);
       }
+
+      console.log("✅ Processed questions:", processedQuestions);
 
       // 🔹 Prepare payload
       const testData = {
         dbname: courseName,
-        rootId: lastClicked,
+        rootId: firstClicked,
         parentId: lastClicked,
-        subjectName,
+        subjectName: subjectName,
         testName: testName.trim(),
         unitName: selectedUnit,
         marks: pass,
         questionsList: processedQuestions,
       };
 
-      console.log("🚀 Update Test Payload:", testData);
+      console.log("🚀 Final Update Payload:", JSON.stringify(testData, null, 2));
 
       // 🔹 Encode test name to handle spaces/special characters
       const encodedTestName = encodeURIComponent(oldQuestionForDeletion);
+      console.log("🔗 URL Components:");
+      console.log("  - Base URL:", API_BASE_URL);
+      console.log("  - lastClicked:", lastClicked);
+      console.log("  - encodedTestName:", encodedTestName);
+      console.log("  - Full URL:", `${API_BASE_URL}/updateQuestion/${lastClicked}/${encodedTestName}`);
 
       // 🔹 PUT request to update test
       const url = `${API_BASE_URL}/updateQuestion/${lastClicked}/${encodedTestName}`;
+
+      console.log("📡 Making PUT request to:", url);
 
       const res = await fetch(url, {
         method: "PUT",
@@ -1252,10 +1400,13 @@ const AdminRight = () => {
         body: JSON.stringify(testData),
       });
 
+      console.log("📨 Response Status:", res.status);
+      console.log("📨 Response OK:", res.ok);
+
       if (!res.ok) {
         const errorMsg = await res.text();
-        console.error("❌ Backend error:", errorMsg);
-        throw new Error(`Failed to update test: ${res.status}`);
+        console.error("❌ Backend error response:", errorMsg);
+        throw new Error(`Failed to update test: ${res.status} - ${errorMsg}`);
       }
 
       const data = await res.json();
@@ -1272,24 +1423,88 @@ const AdminRight = () => {
         showMatches: false,
         tableEditable: false,
       });
-      setEditingTestIndex("");
+      setEditingTestIndex(null);
+
+      alert("✅ Test updated successfully!");
+
     } catch (err) {
       console.error("⚠️ Update failed:", err);
-      alert("Failed to update test. Check console for details.");
+      alert(`Failed to update test: ${err.message}`);
     }
   };
 
-  const handleEditTest = (testData) => {
-    setTestName(testData.name || '');
-    setPassPercentage(testData.passPercentage || '');
-    setSelectedUnit(testData.unitName || '');
-    setQuestions(testData.questions || []); // <- default to []
-    setEditingTestIndex("value");
-    setOldQuestionForDeletion(testData.name || '');
+
+  const handleEditTest = (test) => {
+    if (!test) return;
+
+    console.log("🎯 Starting edit mode for test:", test.testName || test.name);
+
+    // ✅ 1. Set editing state with explicit values
+    setEditingTestIndex("editing");
+
+    // ✅ 2. CRITICAL: Set the old test name for the update API call
+    const oldTestName = test.testName || test.name;
+    setOldQuestionForDeletion(oldTestName);
+
+    // ✅ 3. Set the selected unit from the test data
+    if (test.unitName) {
+      setSelectedUnit(test.unitName);
+    }
+
+    // ✅ 4. Show form
+    setShowTestForm(true);
+    setShowExplanationForm(false);
+
+    // ✅ 5. Load test-level fields
+    setTestName(test.name || test.testName || "");
+    setPassPercentage(test.passPercentage || test.marks || "");
+
+    // ✅ 6. Extract questions
+    const questionArray = test.questionsList || test.questions || [];
+
+    if (Array.isArray(questionArray) && questionArray.length > 0) {
+      const formattedQuestions = questionArray.map((q) => ({
+        text: q.question || q.text || "",
+        questionImages: q.questionImages || [],
+        options: [
+          {
+            text: q.option1 || "",
+            image: q.option1Image || null
+          },
+          {
+            text: q.option2 || "",
+            image: q.option2Image || null
+          },
+          {
+            text: q.option3 || "",
+            image: q.option3Image || null
+          },
+          {
+            text: q.option4 || "",
+            image: q.option4Image || null
+          },
+        ],
+        correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : 0,
+        explanation: q.explanation || "",
+        solutionImages: q.solutionImages || [],
+        rows: q.rows || 0,
+        cols: q.cols || 0,
+        tableData: q.tableData || [],
+        showMatches: Array.isArray(q.tableData) && q.tableData.length > 0,
+        tableEditable: false,
+      }));
+
+      setQuestions(formattedQuestions);
+      setCurrentQuestion(formattedQuestions[0]);
+      setEditingQuestionIndex(0);
+    }
+
+    console.log("✅ Edit mode activated:", {
+      oldTestName: oldTestName,
+      selectedUnit: test.unitName || selectedUnit,
+      questionsCount: questionArray.length
+    });
   };
-
-
-
 
 
 
@@ -1365,30 +1580,19 @@ const AdminRight = () => {
     resetTestForm();
   };
   const resetTestForm = () => {
-    //console.log("here")
+    console.log("🔄 Resetting test form");
+
     setTestTimeLimit('');
     setQuestions([]);
-    // setCurrentQuestion({
-    //   text: '',
-    //   image1: null,
-    //   options: [
-    //     {
-    //       text: '', image: null,
-    //     },
-    //     {
-    //       text: '', image: null,
-    //     },
-    //     {
-    //       text: '', image: null,
-    //     },
-    //     {
-    //       text: '', image: null,
-    //     },
-    //   ],
-    //   correctIndex: null,
-    //   explanation: '',
-    // });
-    const emptyQuestion = {
+    setShowExplanationForm(false);
+    setShowTestForm(false);
+
+    // ✅ Reset editing states
+    setEditingTestIndex(null);
+    setOldQuestionForDeletion('');
+
+    // Reset current question
+    setCurrentQuestion({
       text: '',
       image: null,
       questionImages: [],
@@ -1400,18 +1604,17 @@ const AdminRight = () => {
       ],
       correctIndex: null,
       explanation: '',
+      solutionImages: [],
       rows: 1,
       cols: 1,
       tableData: [],
       showMatches: false,
-      tableEditable: true,
-      showQuestionInput: true,
-      showSolutionInput: true,
-      solutionImages: [],
-    };
+      tableEditable: false,
+      showQuestionInput: false,
+      showSolutionInput: false,
+    });
 
-    setShowExplanationForm(false)
-    setShowTestForm(false);
+    console.log("✅ Test form reset complete");
   };
   const currentUnits = standards.length > 0 ? unitsMap[selectedStandard] || [] : unitsMap.default || [];
   const renderSubtopicsRecursive = (subtopics, depth = 0) => {
@@ -1458,7 +1661,7 @@ const AdminRight = () => {
       subjectName: subjectName,
       standard: standard,
       parentId: subUnit.id,      // ✅ real subunit id
-      rootUnitId: firstClicked,  // ✅ root id
+      rootId: firstClicked,  // ✅ root id
       unitName: subUnit.unitName,
       explanation: subUnit.explanation || ""
     };
@@ -1536,7 +1739,7 @@ const AdminRight = () => {
       subjectName: subjectName,
       standard: standard,
       parentId: editSelecetedSubUnit,   // the id of the subunit we want to update
-      rootUnitId: firstClicked,         // the root document id
+      rootId: firstClicked,         // the root document id
       unitName: subTitle,
       explanation: subDesc,
       // optionally include audioFileId, imageUrls if your form edits them:
@@ -1629,7 +1832,7 @@ const AdminRight = () => {
       standard: standard,
 
       parentId: lastClicked,
-      rootUnitId: firstClicked,
+      rootId: firstClicked,
       unitName: subTitle,
       explanation: subDesc,
       audioFileId: allUrls,
@@ -1795,37 +1998,23 @@ const AdminRight = () => {
   }
 
   const changeTestToFrontend = (realTest) => {
+    console.log("🔄 Converting real test to frontend format:", realTest);
+
+    // Use the actual structure from your database
     const test = {
       name: realTest.testName,
-      timeLimit: realTest.timeLimit,
+      testName: realTest.testName,
+      marks: realTest.marks,
       passPercentage: realTest.marks,
-      questions: realTest.questionsList.map((q) => {
-        const optionList = [
-          { text: q.option1?.text || "", image: q.option1?.image || null },
-          { text: q.option2?.text || "", image: q.option2?.image || null },
-          { text: q.option3?.text || "", image: q.option3?.image || null },
-          { text: q.option4?.text || "", image: q.option4?.image || null },
-        ];
-        const correctIndex = optionList.findIndex(
-          (opt) =>
-            opt.text === (q.answer?.text || "") &&
-            opt.image === (q.answer?.image || null)
-        );
-        return {
-          text: q.question || "",
-          image: q.questionImage || null,
-          options: optionList,
-          correctIndex,
-          explanation: q.explanation || "",
-        };
-      }),
+      questionsList: realTest.questionsList || [], // Use questionsList directly
+      questions: realTest.questionsList || [] // Also set questions for compatibility
     };
 
+    console.log("✅ Converted test:", test);
     setSelectedTest(test);
     setShowTestForm(false);
     setShowExplanationForm(false);
   };
-
 
   // const[knowUnit,setKnowUnit]=useState('');
   // const[knowSubUnit,setKnowSubUnit]=useState('');
@@ -1904,17 +2093,37 @@ const AdminRight = () => {
                       {expandedUnits[currentPath] &&
                         unit.test &&
                         unit.test.map((test, idx) => (
+                          // In your tree view where tests are rendered, update the onClick handler:
+                          // In your tree view where tests are rendered:
                           <button
-                            key={idx}
                             onClick={() => {
-                              setTestName(test.testName);
-                              changeTestToFrontend(test);
+                              console.log("🎯 Selected test from backend:", test);
+
+                              // Use the actual test data from backend directly
+                              const frontendTest = {
+                                name: test.testName,
+                                testName: test.testName,
+                                marks: test.marks,
+                                passPercentage: test.marks,
+                                questionsList: test.questionsList || [],
+                                questions: test.questionsList || [],
+                                unitName: unit.unitName
+                              };
+
+                              setSelectedTest(frontendTest);
+
+                              // ✅ Set the selected unit when clicking on a test
+                              setSelectedUnit(unit.unitName);
+
+                              console.log("✅ Set selectedTest and selectedUnit:", frontendTest, unit.unitName);
 
                               const rootId = findRootOfUnit(unit.id, unitData);
                               setFirstClicked(rootId);
                               setLastClicked(unit.id);
-
                               setSelectedSubTopicUnit(unit);
+
+                              setShowTestForm(false);
+                              setShowExplanationForm(false);
                             }}
                             style={{ padding: '0px', marginLeft: '0px', background: 'none', color: 'blue' }}
                           >
@@ -2283,13 +2492,25 @@ const AdminRight = () => {
                       <li
                         key={`test-${idx}`}
                         onClick={() => {
-                          setSelectedTest(test);
+                          console.log("🎯 Selected test from lessonTestsMap:", test);
+                          // Use the actual test data structure
+                          const frontendTest = {
+                            name: test.name || test.testName,
+                            testName: test.testName || test.name,
+                            marks: test.marks || test.passPercentage,
+                            passPercentage: test.marks || test.passPercentage,
+                            questionsList: test.questionsList || test.questions || [],
+                            questions: test.questionsList || test.questions || []
+                          };
+
+                          setSelectedTest(frontendTest);
+                          console.log("✅ Set selectedTest to:", frontendTest);
                           setShowTestForm(false);
                           setShowExplanationForm(false);
                         }}
                         style={{ cursor: 'pointer' }}
                       >
-                        📝 {test.name}
+                        📝 {test.name || test.testName}
                       </li>
                     ))}
                   </ul>
@@ -2340,7 +2561,7 @@ const AdminRight = () => {
                     }
                     setShowTestForm(true);
                     setShowExplanationForm(false);
-                    setSelectedTest(null);
+                    setSelectedTest(true);
                     setTestName('');
                     setCurrentQuestion({
                       text: '',
@@ -2427,137 +2648,202 @@ const AdminRight = () => {
               </div>
             )}
 
+
             {selectedTest && (
               <div className="test-detail-box" style={{ marginTop: "20px" }}>
-                <h4>Test Preview</h4>
+                <h4>🧾 Test Preview</h4>
                 <p><strong>Name:</strong> {selectedTest.testName || selectedTest.name}</p>
                 <p><strong>Pass Percentage:</strong> {selectedTest.marks || selectedTest.passPercentage}%</p>
 
-                <h5><strong>Questions:</strong></h5>
+                <h5 style={{ marginTop: "15px" }}><strong>Questions:</strong></h5>
+
                 <ol>
                   {(selectedTest.questionsList || selectedTest.questions || []).map((q, idx) => {
-                    // Normalize options safely
-                    const options =
-                      q.options && Array.isArray(q.options)
-                        ? q.options.map(opt => ({
-                          text: opt.text || "",
-                          image: opt.image && opt.image !== "NO_OPTION_IMAGE" ? opt.image : null,
-                        }))
-                        : [
-                          { text: q.option1 || "", image: q.option1Image || null },
-                          { text: q.option2 || "", image: q.option2Image || null },
-                          { text: q.option3 || "", image: q.option3Image || null },
-                          { text: q.option4 || "", image: q.option4Image || null },
-                        ];
+                    // ✅ Safely get question images - only string URLs
+                    const questionImages = (q.questionImages || []).filter(img =>
+                      img && typeof img === "string" && img !== "NO_QUESTION_IMAGE"
+                    );
 
-                    // Normalize question + solution + match table data
-                    const questionImages =
-                      q.questionImages?.filter(img => img && img !== "NO_QUESTION_IMAGE") || [];
-                    const solutionImages =
-                      q.solutionImages?.filter(img => img && img !== "NO_SOLUTION_IMAGE") || [];
-                    const tableData =
-                      Array.isArray(q.tableData) && q.tableData.length
-                        ? q.tableData
-                        : q.matchTable || [];
+                    // ✅ Safely get solution images - only string URLs
+                    const solutionImages = (q.solutionImages || []).filter(img =>
+                      img && typeof img === "string" && img !== "NO_SOLUTION_IMAGE"
+                    );
+
+                    // ✅ Safely get options
+                    const options = [
+                      {
+                        text: q.option1 || "",
+                        image: (q.option1Image && typeof q.option1Image === "string" && q.option1Image !== "NO_OPTION_IMAGE") ? q.option1Image : null
+                      },
+                      {
+                        text: q.option2 || "",
+                        image: (q.option2Image && typeof q.option2Image === "string" && q.option2Image !== "NO_OPTION_IMAGE") ? q.option2Image : null
+                      },
+                      {
+                        text: q.option3 || "",
+                        image: (q.option3Image && typeof q.option3Image === "string" && q.option3Image !== "NO_OPTION_IMAGE") ? q.option3Image : null
+                      },
+                      {
+                        text: q.option4 || "",
+                        image: (q.option4Image && typeof q.option4Image === "string" && q.option4Image !== "NO_OPTION_IMAGE") ? q.option4Image : null
+                      },
+                    ];
+
+                    const correctIndex = typeof q.correctIndex === "number" ? q.correctIndex : 0;
+
+                    // ✅ Get table data
+                    const tableData = Array.isArray(q.tableData) && q.tableData.length ? q.tableData : [];
 
                     return (
-                      <li key={idx} style={{ marginBottom: "20px" }}>
-                        <strong>{q.question || q.text}</strong>
+                      <li
+                        key={idx}
+                        style={{
+                          marginBottom: "25px",
+                          background: "#fff",
+                          border: "1px solid #ddd",
+                          borderRadius: "10px",
+                          padding: "15px",
+                          boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+                        }}
+                      >
+                        {/* Question */}
+                        <p>
+                          <strong>Q{idx + 1}.</strong>{" "}
+                          {parseTextWithFormulas(q.question || q.text || "")}
+                        </p>
 
                         {/* Question Images */}
                         {questionImages.length > 0 && (
-                          <div style={{ marginTop: "5px", marginBottom: "5px" }}>
-                            {questionImages.map((img, i) => (
-                              <img
-                                key={i}
-                                src={img}
-                                alt={`question-${i}`}
-                                style={{
-                                  maxWidth: "150px",
-                                  marginRight: "5px",
-                                  marginTop: "5px",
-                                  borderRadius: "4px",
-                                }}
-                              />
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Options */}
-                        <ul>
-                          {options.map((opt, i) => (
-                            <li key={i} style={{ marginBottom: "5px" }}>
-                              {i === (q.correctIndex ?? 0) ? "✅ " : ""}
-                              <span>{opt.text || "(no text)"}</span>
-                              {opt.image && (
+                          <div style={{ marginBottom: "12px" }}>
+                            <h5>Question Images:</h5>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                              {questionImages.map((url, i) => (
                                 <img
-                                  src={opt.image}
-                                  alt={`option-${i}`}
+                                  key={i}
+                                  src={url}
+                                  alt={`question-${i}`}
                                   style={{
-                                    maxWidth: "100px",
-                                    marginLeft: "10px",
-                                    verticalAlign: "middle",
+                                    width: "150px",
+                                    height: "auto",
+                                    maxHeight: "150px",
                                     borderRadius: "4px",
+                                    objectFit: "cover",
+                                    border: "1px solid #ccc",
                                   }}
                                 />
-                              )}
-                            </li>
-                          ))}
-                        </ul>
-
-                        {/* Explanation */}
-                        <p>
-                          <strong>Explanation:</strong> {q.explanation || "(no explanation)"}
-                        </p>
-
-                        {/* Solution Images */}
-                        {solutionImages.length > 0 && (
-                          <div style={{ marginTop: "5px", marginBottom: "5px" }}>
-                            {solutionImages.map((img, i) => (
-                              <img
-                                key={i}
-                                src={img}
-                                alt={`solution-${i}`}
-                                style={{
-                                  maxWidth: "150px",
-                                  marginRight: "5px",
-                                  marginTop: "5px",
-                                  borderRadius: "4px",
-                                }}
-                              />
-                            ))}
+                              ))}
+                            </div>
                           </div>
                         )}
 
                         {/* Match Table */}
                         {tableData.length > 0 && (
-                          <table
-                            border="1"
-                            style={{
-                              marginTop: "5px",
-                              borderCollapse: "collapse",
-                              background: "#fafafa",
-                            }}
-                          >
-                            <tbody>
-                              {tableData.map((row, rIdx) => (
-                                <tr key={rIdx}>
-                                  {row.map((cell, cIdx) => (
-                                    <td
-                                      key={cIdx}
+                          <div style={{ marginTop: "10px" }}>
+                            <h5>Match Table:</h5>
+                            <table
+                              style={{
+                                width: "100%",
+                                borderCollapse: "collapse",
+                                border: "1px solid #ccc",
+                                background: "#fafafa",
+                              }}
+                            >
+                              <tbody>
+                                {tableData.map((row, rIdx) => (
+                                  <tr key={rIdx}>
+                                    {row.map((cell, cIdx) => (
+                                      <td
+                                        key={cIdx}
+                                        style={{
+                                          border: "1px solid #ccc",
+                                          padding: "6px",
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {parseTextWithFormulas(cell)}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+
+                        {/* Options */}
+                        <div style={{ marginTop: "10px" }}>
+                          <h5>Options:</h5>
+                          <ul style={{ listStyle: "none", padding: 0 }}>
+                            {options.map((opt, i) => {
+                              const isCorrect = i === correctIndex;
+                              return (
+                                <li
+                                  key={i}
+                                  style={{
+                                    marginBottom: "8px",
+                                    background: isCorrect ? "#e8f9e9" : "#f9f9f9",
+                                    border: isCorrect ? "1px solid #7ed957" : "1px solid #ddd",
+                                    borderRadius: "6px",
+                                    padding: "8px",
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: "4px",
+                                  }}
+                                >
+                                  <span>
+                                    {isCorrect && "✅"}{" "}
+                                    {parseTextWithFormulas(opt.text || "")}
+                                  </span>
+                                  {opt.image && (
+                                    <img
+                                      src={opt.image}
+                                      alt={`option-${i}`}
                                       style={{
-                                        padding: "4px 8px",
+                                        width: "120px",
+                                        height: "auto",
+                                        maxHeight: "120px",
+                                        borderRadius: "4px",
+                                        objectFit: "cover",
                                         border: "1px solid #ccc",
-                                        textAlign: "center",
                                       }}
-                                    >
-                                      {cell}
-                                    </td>
-                                  ))}
-                                </tr>
+                                    />
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+
+                        {/* Explanation */}
+                        {q.explanation && (
+                          <div style={{ marginTop: "10px" }}>
+                            <strong>Explanation:</strong>{" "}
+                            {parseTextWithFormulas(q.explanation)}
+                          </div>
+                        )}
+
+                        {/* Solution Images */}
+                        {solutionImages.length > 0 && (
+                          <div style={{ marginBottom: "12px" }}>
+                            <h5>Solution Images:</h5>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                              {solutionImages.map((url, i) => (
+                                <img
+                                  key={i}
+                                  src={url}
+                                  alt={`solution-${i}`}
+                                  style={{
+                                    width: "150px",
+                                    height: "auto",
+                                    maxHeight: "150px",
+                                    borderRadius: "4px",
+                                    objectFit: "cover",
+                                    border: "1px solid #ccc",
+                                  }}
+                                />
                               ))}
-                            </tbody>
-                          </table>
+                            </div>
+                          </div>
                         )}
                       </li>
                     );
@@ -2565,63 +2851,28 @@ const AdminRight = () => {
                 </ol>
 
                 {/* Edit / Delete Buttons */}
-                <div style={{ marginTop: "10px" }}>
-                  <button
-                    onClick={() => {
-                      setShowTestForm(true);
-                      setTestName(selectedTest.testName || selectedTest.name);
-                      setPassPercentage(selectedTest.marks || selectedTest.passPercentage);
-                      setSelectedUnit(selectedTest.unitName);
-
-                      // Normalize questions for editing form
-                      const mappedQuestions = (selectedTest.questionsList || selectedTest.questions || []).map(q => ({
-                        text: q.question || q.text || "",
-                        questionImages:
-                          q.questionImages?.filter(img => img && img !== "NO_QUESTION_IMAGE") || [],
-                        options:
-                          q.options?.map(opt => ({
-                            text: opt.text || "",
-                            image: opt.image && opt.image !== "NO_OPTION_IMAGE" ? opt.image : null,
-                          })) || [
-                            { text: q.option1 || "", image: q.option1Image || null },
-                            { text: q.option2 || "", image: q.option2Image || null },
-                            { text: q.option3 || "", image: q.option3Image || null },
-                            { text: q.option4 || "", image: q.option4Image || null },
-                          ],
-                        correctIndex: q.correctIndex ?? 0,
-                        explanation: q.explanation || "",
-                        solutionImages:
-                          q.solutionImages?.filter(img => img && img !== "NO_SOLUTION_IMAGE") || [],
-                        rows: q.rows || (q.tableData ? q.tableData.length : 1),
-                        cols: q.cols || (q.tableData && q.tableData[0] ? q.tableData[0].length : 1),
-                        tableData:
-                          Array.isArray(q.tableData) && q.tableData.length
-                            ? q.tableData
-                            : q.matchTable || [],
-                        showMatches:
-                          (q.tableData && q.tableData.length > 0) ||
-                          (q.matchTable && q.matchTable.length > 0),
-                        tableEditable: true,
-                        showQuestionInput:
-                          q.questionImages && q.questionImages.length > 0,
-                        showSolutionInput:
-                          q.solutionImages && q.solutionImages.length > 0,
-                      }));
-
-                      setQuestions(mappedQuestions);
-                      setOldQuestionForDeletion(selectedTest.testName || selectedTest.name);
-                      setEditingTestIndex("edit");
-                    }}
-                  >
-                    Edit All
+                <div style={{ marginTop: "15px" }}>
+                  <button className="edit-btn" onClick={() => handleEditTest(selectedTest)}>
+                    ✏️ Edit All
                   </button>
 
-                  <button onClick={() => handleDeleteTest()} style={{ marginLeft: "10px" }}>
-                    <Trash2 size={10} /> All Delete
+                  <button
+                    className="delete-btn"
+                    onClick={() => handleDeleteTest(selectedTest)}
+                    style={{ marginLeft: "10px" }}
+                  >
+                    🗑️ Delete All
                   </button>
                 </div>
               </div>
             )}
+
+
+
+
+
+
+
 
 
             {audio?.map(a => (
@@ -2678,46 +2929,65 @@ const AdminRight = () => {
                 {/* ✅ Preview selected images */}
                 {currentQuestion.image && currentQuestion.image.length > 0 && (
                   <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "10px" }}>
-                    {currentQuestion.image.map((img, idx) => (
-                      <div key={idx} style={{ position: "relative" }}>
-                        <img
-                          src={typeof img === "string" ? img : URL.createObjectURL(img)}
-                          alt={`upload-preview-${idx}`}
-                          width="120"
-                          height="120"
-                          style={{ objectFit: "cover", borderRadius: 6 }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCurrentQuestion((q) => ({
-                              ...q,
-                              image: q.image.filter((_, i) => i !== idx),
-                            }))
+                    {currentQuestion.image.map((img, idx) => {
+                      // Safe URL function
+                      const getSafeImageUrl = (image) => {
+                        if (!image) return null;
+                        if (typeof image === "string") return image;
+                        if (image instanceof File || image instanceof Blob) {
+                          try {
+                            return URL.createObjectURL(image);
+                          } catch (error) {
+                            console.warn('Failed to create object URL:', error);
+                            return null;
                           }
-                          style={{
-                            position: "absolute",
-                            top: "4px",
-                            right: "4px",
-                            background: "black",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "50%",
-                            width: "20px",
-                            height: "20px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            fontSize: "12px",
-                            lineHeight: "1",
-                            padding: "0",
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                        }
+                        return null;
+                      };
+
+                      const imgSrc = getSafeImageUrl(img);
+
+                      return imgSrc ? (
+                        <div key={idx} style={{ position: "relative" }}>
+                          <img
+                            src={imgSrc}
+                            alt={`upload-preview-${idx}`}
+                            width="120"
+                            height="120"
+                            style={{ objectFit: "cover", borderRadius: 6 }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCurrentQuestion((q) => ({
+                                ...q,
+                                image: q.image.filter((_, i) => i !== idx),
+                              }))
+                            }
+                            style={{
+                              position: "absolute",
+                              top: "4px",
+                              right: "4px",
+                              background: "black",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "50%",
+                              width: "20px",
+                              height: "20px",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "12px",
+                              lineHeight: "1",
+                              padding: "0",
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : null;
+                    })}
                   </div>
                 )}
                 {/* Record Audio */}
@@ -2735,48 +3005,46 @@ const AdminRight = () => {
                   ) : (
                     <button onClick={handleStartRecording}>Record Audio</button>
                   )}
-                  {/* 🎧 Existing Audio from Backend (for Edit Mode) */}
                   {Array.isArray(currentQuestion?.audio) && currentQuestion.audio.length > 0 && (
                     <ul style={{ listStyle: 'none', padding: 0, marginTop: '10px' }}>
-                      {currentQuestion.audio.map((audio, index) => (
-                        <li key={index} style={{ marginTop: '10px' }}>
-                          <audio
-                            controls
-                            src={typeof audio === 'string' ? audio : URL.createObjectURL(audio)}
-                          />
-                          <button
-                            className="remove-button"
-                            onClick={() =>
-                              setCurrentQuestion((prev) => ({
-                                ...prev,
-                                audio: prev.audio.filter((_, i) => i !== index),
-                              }))
-                            }
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      ))}
+                      {currentQuestion.audio.map((audio, index) => {
+                        const audioSrc = getSafeAudioUrl(audio); {/* ✅ Use the global function */ }
+                        return audioSrc ? (
+                          <li key={index} style={{ marginTop: '10px' }}>
+                            <audio controls src={audioSrc} />
+                            <button
+                              className="remove-button"
+                              onClick={() =>
+                                setCurrentQuestion((prev) => ({
+                                  ...prev,
+                                  audio: prev.audio.filter((_, i) => i !== index),
+                                }))
+                              }
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ) : null;
+                      })}
                     </ul>
                   )}
                   {/* 🎙️ Newly Recorded Audios */}
-                  {recordedVoiceFiles.length > 0 && (
-                    <ul style={{ listStyle: 'none', padding: 0, marginTop: '10px' }}>
-                      {recordedVoiceFiles.map((file, index) => (
-                        <li key={index} style={{ marginTop: '10px' }}>
-                          <audio controls src={URL.createObjectURL(file)} />
-                          <button
-                            className="remove-button"
-                            onClick={() =>
-                              setRecordedVoiceFiles((prev) => prev.filter((_, i) => i !== index))
-                            }
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  {recordedVoiceFiles.map((file, index) => {
+                    const audioSrc = getSafeAudioUrl(file); // Use the same safe function
+                    return audioSrc ? (
+                      <li key={index} style={{ marginTop: '10px' }}>
+                        <audio controls src={audioSrc} />
+                        <button
+                          className="remove-button"
+                          onClick={() =>
+                            setRecordedVoiceFiles((prev) => prev.filter((_, i) => i !== index))
+                          }
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ) : null;
+                  })}
 
                 </div>
                 {/* Upload Audio */}
@@ -2816,19 +3084,22 @@ const AdminRight = () => {
                       ))}
 
                       {/* Show newly selected files before upload */}
-                      {uploadedVoiceFiles.map((file, index) => (
-                        <li key={`local-${index}`} style={{ marginTop: '10px' }}>
-                          <audio controls src={URL.createObjectURL(file)} />
-                          <button
-                            className="remove-button"
-                            onClick={() =>
-                              setUploadedVoiceFiles((prev) => prev.filter((_, i) => i !== index))
-                            }
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      ))}
+                      {uploadedVoiceFiles.map((file, index) => {
+                        const audioSrc = getSafeAudioUrl(file);
+                        return audioSrc ? (
+                          <li key={`local-${index}`} style={{ marginTop: '10px' }}>
+                            <audio controls src={audioSrc} />
+                            <button
+                              className="remove-button"
+                              onClick={() =>
+                                setUploadedVoiceFiles((prev) => prev.filter((_, i) => i !== index))
+                              }
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        ) : null;
+                      })}
                     </ul>
                   )}
                 </div>
@@ -3063,13 +3334,13 @@ const AdminRight = () => {
                       console.log("🎥 IDs for AI video:", {
                         subtopicId: lastInsertedId,
                         parentId: lastClicked,
-                        rootUnitId: lastClicked,
+                        rootId: firstClicked,
                         subjectName: subjectName,
                         dbname: courseName
                       });
 
                       // Store the selected lesson for AdminRight
-                      localStorage.setItem("openLessonId", selectedUnit);
+                      localStorage.setItem("openLessonId", selectedUnit, selectedSubUnit);
 
                       // Construct AI video page URL with all necessary parameters
                       const aiVideoParams = new URLSearchParams({
@@ -3077,13 +3348,13 @@ const AdminRight = () => {
                         description: subDesc,
                         subtopicId: lastInsertedId,
                         parentId: lastClicked,
-                        rootUnitId: lastClicked,
+                        rootId: firstClicked,
                         dbname: courseName,
                         subjectName: subjectName,
                         returnTo: window.location.href
                       });
 
-                      const aiVideoUrl = `https://majestic-frangollo-031fed.netlify.app/?${aiVideoParams.toString()}`;
+                      const aiVideoUrl = `https://classy-kulfi-cddfef.netlify.app/?${aiVideoParams.toString()}`;
 
                       console.log("🎥 Navigating to AI page:", aiVideoUrl);
                       window.open(aiVideoUrl, '_blank');
@@ -3207,15 +3478,18 @@ const AdminRight = () => {
                           flexWrap: "wrap",
                         }}
                       >
-                        {currentQuestion.questionImages.map((img, index) => (
-                          <img
-                            key={index}
-                            src={URL.createObjectURL(img)}
-                            alt={`question-${index}`}
-                            width={100}
-                            style={{ border: "1px solid #ccc", borderRadius: "6px" }}
-                          />
-                        ))}
+                        {currentQuestion.questionImages.map((img, index) => {
+                          const imgSrc = getSafeImageUrl(img);
+                          return imgSrc ? (
+                            <img
+                              key={index}
+                              src={imgSrc}
+                              alt={`question-${index}`}
+                              width={100}
+                              style={{ border: "1px solid #ccc", borderRadius: "6px" }}
+                            />
+                          ) : null;
+                        })}
                       </div>
                     )}
 
@@ -3322,46 +3596,48 @@ const AdminRight = () => {
                   </div>
                 )}
                 <h5>Options</h5>
-                {currentQuestion.options.map((opt, idx) => (
-                  <div key={idx} className="option-row">
-                    <input
-                      type="radio"
-                      name="correct"
-                      checked={currentQuestion.correctIndex === idx}
-                      onChange={() => setCurrentQuestion((q) => ({ ...q, correctIndex: idx }))}
-                    />
-                    <input
-                      type="text"
-                      placeholder={`Option ${idx + 1}`}
-                      value={opt.text}
-                      onChange={(e) => {
-                        const newOpts = [...currentQuestion.options];
-                        newOpts[idx] = e.target.value;
-                        setCurrentQuestion((q) => ({ ...q, options: newOpts }));
-                      }}
-                    />
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files[0];
-                        if (file) {
-                          const newOpts = [...currentQuestion.options];
-                          newOpts[idx] = { ...newOpts[idx], image: file };
-                          setCurrentQuestion((q) => ({ ...q, options: newOpts }));
-                        }
-                      }}
-                    />
-                    {opt.image && (
-                      <img
-                        src={URL.createObjectURL(opt.image)}
-                        alt={`Option ${idx + 1} Preview`}
-                        style={{ width: "100px", marginLeft: "10px" }}
+                {currentQuestion.options.map((opt, idx) => {
+                  const optionImageSrc = getSafeImageUrl(opt.image);
+                  return (
+                    <div key={idx} className="option-row">
+                      <input
+                        type="radio"
+                        name="correct"
+                        checked={currentQuestion.correctIndex === idx}
+                        onChange={() => setCurrentQuestion((q) => ({ ...q, correctIndex: idx }))}
                       />
-                    )}
-                  </div>
-
-                ))}
+                      <input
+                        type="text"
+                        placeholder={`Option ${idx + 1}`}
+                        value={opt.text}
+                        onChange={(e) => {
+                          const newOpts = [...currentQuestion.options];
+                          newOpts[idx] = e.target.value;
+                          setCurrentQuestion((q) => ({ ...q, options: newOpts }));
+                        }}
+                      />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const newOpts = [...currentQuestion.options];
+                            newOpts[idx] = { ...newOpts[idx], image: file };
+                            setCurrentQuestion((q) => ({ ...q, options: newOpts }));
+                          }
+                        }}
+                      />
+                      {optionImageSrc && (
+                        <img
+                          src={optionImageSrc}
+                          alt={`Option ${idx + 1} Preview`}
+                          style={{ width: "100px", marginLeft: "10px" }}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
                 <textarea
                   placeholder="Explain the correct answer"
                   rows={3}
@@ -3407,164 +3683,181 @@ const AdminRight = () => {
                         flexWrap: "wrap",
                       }}
                     >
-                      {currentQuestion.solutionImages.map((img, index) => (
-                        <img
-                          key={index}
-                          src={URL.createObjectURL(img)}
-                          alt={`solution-${index}`}
-                          width={100}
-                          style={{ border: "1px solid #ccc", borderRadius: "6px" }}
-                        />
-                      ))}
+                      {currentQuestion.solutionImages.map((img, index) => {
+                        const imgSrc = getSafeImageUrl(img);
+                        return imgSrc ? (
+                          <img
+                            key={index}
+                            src={imgSrc}
+                            alt={`solution-${index}`}
+                            width={100}
+                            style={{ border: "1px solid #ccc", borderRadius: "6px" }}
+                          />
+                        ) : null;
+                      })}
                     </div>
                   )}
                 {/* <button className='btn' onClick={handleAddQuestion}>Add Question</button> */}
 
                 <button
                   onClick={() => {
-                    // Push a deep copy of currentQuestion into questions array
-                    setQuestions(prev => [...prev, { ...currentQuestion }]);
+                    // 1️⃣ Add the current question to the array
+                    setQuestions((prev) => [...prev, { ...currentQuestion }]);
 
-                    // Reset currentQuestion to full template for next question
+                    // 2️⃣ Reset everything using emptyQuestion
                     setCurrentQuestion({ ...emptyQuestion });
 
+                    // 3️⃣ Clear editing index
                     setEditingQuestionIndex(null);
+
+                    // 4️⃣ Clear form data question list
+                    setFormData((prevForm) => ({
+                      ...prevForm,
+                      questionsList: [],
+                    }));
+
+                    // 5️⃣ Clear file inputs (images)
+                    const fileInputs = document.querySelectorAll('input[type="file"]');
+                    fileInputs.forEach((input) => (input.value = ""));
+
+                    // 6️⃣ Optional feedback
+                    alert("✅ Question added and all fields reset!");
                   }}
                 >
                   Add Question
                 </button>
-
-
-
                 {editingQuestionIndex !== null && (
                   <button
                     onClick={() => {
                       setEditingQuestionIndex(null);
-                      setCurrentQuestion({
-                        text: '',
-                        image: null,
-                        options: [
-                          { text: '', image: null },
-                          { text: '', image: null },
-                          { text: '', image: null },
-                          { text: '', image: null },
-                        ],
-                        correctIndex: null,
-                        explanation: '',
-                      });
+                      setCurrentQuestion({ ...emptyQuestion });
                     }}
                     style={{ marginLeft: '10px' }}
                   >
                     Cancel Edit
                   </button>
                 )}
+
+
                 {Array.isArray(questions) && questions.length > 0 && (
                   <ol>
-                    {questions.map((q, idx) => (
-                      <li key={idx} style={{ marginBottom: '10px' }}>
-                        <div>
-                          {q.text && <strong>{q.text}</strong>}
-                          {q.image && (
-                            <div>
-                              <img
-                                src={typeof q.image === "string" ? q.image : URL.createObjectURL(q.image)}
-                                alt="Question"
-                                style={{ maxWidth: "150px", display: "block", marginTop: "5px" }}
-                              />
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{ marginTop: '5px' }}>
-                          <button
-                            onClick={() => {
-                              // Prefill currentQuestion safely
-                              setCurrentQuestion({
-                                text: q.text || '',
-                                image: q.image || null,
-                                questionImages: q.questionImages || [],
-                                options: Array.isArray(q.options)
-                                  ? q.options.map(opt => ({
-                                    text: opt?.text || '',
-                                    image: opt?.image || null,
-                                  }))
-                                  : [
-                                    { text: '', image: null },
-                                    { text: '', image: null },
-                                    { text: '', image: null },
-                                    { text: '', image: null },
-                                  ],
-                                correctIndex: q.correctIndex ?? null,
-                                explanation: q.explanation || '',
-                                rows: q.rows || 1,
-                                cols: q.cols || 1,
-                                tableData: q.tableData || [],
-                                showMatches: q.showMatches || false,
-                                tableEditable: q.tableEditable ?? true,
-                                showQuestionInput: false,
-                                showSolutionInput: false,
-                                solutionImages: q.solutionImages || [],
-                              });
-
-
-                              setEditingQuestionIndex(idx);
-                            }}
-                          >
-                            Edit
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              const confirmed = window.confirm("Are you sure You want to Delete this whole unit?");
-                              if (!confirmed) return;
-
-                              const updatedQuestions = questions.filter((_, i) => i !== idx);
-                              setQuestions(updatedQuestions);
-
-                              if (editingQuestionIndex === idx) {
+                    {questions.map((q, idx) => {
+                      const imageSrc = getSafeImageUrl(q.image);
+                      return (
+                        <li key={idx} style={{ marginBottom: '10px' }}>
+                          <div>
+                            {q.text && <strong>{q.text}</strong>}
+                            {imageSrc && (
+                              <div>
+                                <img
+                                  src={imageSrc}
+                                  alt="Question"
+                                  style={{ maxWidth: "150px", display: "block", marginTop: "5px" }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ marginTop: '5px' }}>
+                            <button
+                              onClick={() => {
+                                // Prefill currentQuestion safely
                                 setCurrentQuestion({
-                                  text: '',
-                                  image: null,
-                                  options: [
-                                    { text: '', image: null },
-                                    { text: '', image: null },
-                                    { text: '', image: null },
-                                    { text: '', image: null },
-                                  ],
-                                  correctIndex: null,
-                                  explanation: '',
+                                  text: q.text || "",
+                                  questionImages: q.questionImages || [],
+                                  options: Array.isArray(q.options)
+                                    ? q.options.map((opt) => ({
+                                      text: typeof opt === "string" ? opt : opt?.text || "",
+                                      image: typeof opt === "object" && opt?.image ? opt.image : null,
+                                    }))
+                                    : [
+                                      { text: "", image: null },
+                                      { text: "", image: null },
+                                      { text: "", image: null },
+                                      { text: "", image: null },
+                                    ],
+                                  correctIndex: typeof q.correctIndex === "number" ? q.correctIndex : null,
+                                  explanation: q.explanation || "",
+                                  solutionImages: q.solutionImages || [],
+                                  rows: q.rows || 0,
+                                  cols: q.cols || 0,
+                                  tableData: q.tableData || [],
+                                  showMatches: q.showMatches || false,
+                                  tableEditable: q.tableEditable ?? false,
+                                  showQuestionInput: false,
+                                  showSolutionInput: false,
                                 });
-                                setEditingQuestionIndex(null);
-                              }
-                            }}
-                            style={{ marginLeft: '10px' }}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </li>
-                    ))}
+                                setEditingQuestionIndex(idx);
+                              }}
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                const confirmed = window.confirm("Are you sure You want to Delete this whole unit?");
+                                if (!confirmed) return;
+
+                                const updatedQuestions = questions.filter((_, i) => i !== idx);
+                                setQuestions(updatedQuestions);
+
+                                if (editingQuestionIndex === idx) {
+                                  setCurrentQuestion({
+                                    text: '',
+                                    image: null,
+                                    options: [
+                                      { text: '', image: null },
+                                      { text: '', image: null },
+                                      { text: '', image: null },
+                                      { text: '', image: null },
+                                    ],
+                                    correctIndex: null,
+                                    explanation: '',
+                                  });
+                                  setEditingQuestionIndex(null);
+                                }
+                              }}
+                              style={{ marginLeft: '10px' }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
 
                 <div className="action-buttons">
                   <button
                     onClick={() => {
-                      if (editingTestIndex === 'edit') {
-                        handleUpdateTest(); // ✅ call update when editing
+                      // More explicit check for edit mode
+                      const isEditMode = editingTestIndex !== null && editingTestIndex !== "" && oldQuestionForDeletion;
+
+                      console.log("🔄 Action button clicked - Mode:", isEditMode ? "EDIT" : "CREATE");
+                      console.log("   - editingTestIndex:", editingTestIndex);
+                      console.log("   - oldQuestionForDeletion:", oldQuestionForDeletion);
+
+                      if (isEditMode) {
+                        handleUpdateTest();
                       } else {
-                        handleSaveTest();   // ✅ call save when creating new
+                        handleSaveTest();
                       }
                     }}
                   >
-                    {editingTestIndex === 'edit' ? 'Update Test' : 'Save Test'}
+                    {/* More reliable button text logic */}
+                    {(editingTestIndex !== null && editingTestIndex !== "" && oldQuestionForDeletion) ? 'Update Test' : 'Save Test'}
                   </button>
 
-                  {editingTestIndex === 'edit' && (
+                  {/* Show Delete button only when editing */}
+                  {(editingTestIndex !== null && editingTestIndex !== "" && oldQuestionForDeletion) && (
                     <button onClick={handleDeleteTest}>Delete Test</button>
                   )}
 
-                  <button onClick={resetTestForm}>Cancel</button>
+                  <button onClick={() => {
+                    resetTestForm();
+                    setEditingTestIndex(null);
+                    setOldQuestionForDeletion('');
+                  }}>Cancel</button>
                 </div>
 
               </div>
