@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Pencil, Trash2 }                     from "lucide-react";
@@ -117,7 +116,8 @@ const AdminRight = () => {
   const [lastClicked, setLastClicked] = useState(null);
 
   const [editingTestIndex, setEditingTestIndex] = useState(null);
-
+  // ✅ ADD after your existing state declarations
+  const [subtopicImages, setSubtopicImages] = useState([]);
   const [oldQuestionForDeletion, setOldQuestionForDeletion] = useState();
 
   const [loading, setLoading] = useState(true);
@@ -205,25 +205,7 @@ const AdminRight = () => {
     }
   }, [currentQuestion, editingQuestionIndex]);
 
-  // New subtopic update effect
-  useEffect(() => {
-    if (editingSubtopicIndex !== null && selectedUnit && lessonSubtopicsMap[selectedUnit]?.[editingSubtopicIndex]) {
-      const updatedSubtopics = [...lessonSubtopicsMap[selectedUnit]];
 
-      updatedSubtopics[editingSubtopicIndex] = {
-        ...updatedSubtopics[editingSubtopicIndex],
-        unitName: subTitle,
-        explanation: subDesc,
-        imageUrls: currentQuestion?.image || updatedSubtopics[editingSubtopicIndex].imageUrls,
-        audioFileId: selectedSubTopicUnitAudio || updatedSubtopics[editingSubtopicIndex].audioFileId,
-      };
-
-      setLessonSubtopicsMap(prev => ({
-        ...prev,
-        [selectedUnit]: updatedSubtopics
-      }));
-    }
-  }, [subTitle, subDesc, currentQuestion?.image, selectedSubTopicUnitAudio, editingSubtopicIndex, selectedUnit]);
 
   const [formData, setFormData] = useState({
     topic: "",
@@ -462,7 +444,7 @@ const AdminRight = () => {
           unit: {
             unitName: newUnit,
             standard: standard,
-            
+
           },
         }),
       })
@@ -1918,13 +1900,20 @@ const AdminRight = () => {
     setEditSelecetedSubUnit(subUnit.id || subUnit._id);
     setSubTitle(subUnit.unitName || "");
     setSubDesc(subUnit.explanation || "");
-    setRecordedVoiceFiles(subUnit.voices || "");
 
-    // 🖼️ preload images (existing)
-    setCurrentQuestion({
-      image: subUnit.imageUrls ? [...subUnit.imageUrls] : [],
-      audio: subUnit.audioFileId ? [...subUnit.audioFileId] : [],
-    });
+    // ✅ FIXED: Properly load existing images
+    if (subUnit.imageUrls && Array.isArray(subUnit.imageUrls)) {
+      setSubtopicImages([...subUnit.imageUrls]);
+    } else {
+      setSubtopicImages([]);
+    }
+
+    // ✅ FIXED: Properly load existing audio files
+    if (subUnit.audioFileId && Array.isArray(subUnit.audioFileId)) {
+      setSelectedSubTopicUnitAudio([...subUnit.audioFileId]);
+    } else {
+      setSelectedSubTopicUnitAudio([]);
+    }
 
     setRecordedVoiceFiles([]);
     setUploadedVoiceFiles([]);
@@ -1939,6 +1928,35 @@ const AdminRight = () => {
     }
 
     try {
+      console.log("🔄 Starting subtopic update...");
+
+      // ✅ FIXED: Process images properly - upload new files, keep existing URLs
+      const imageUrls = [];
+      if (subtopicImages && subtopicImages.length > 0) {
+        for (const img of subtopicImages) {
+          if (img instanceof File) {
+            // New file - upload it
+            const imageUrl = await uploadFileToBackend(img, "subtopics/images");
+            if (imageUrl) imageUrls.push(imageUrl);
+          } else if (typeof img === "string" && img.startsWith("http")) {
+            // Existing URL - keep it
+            imageUrls.push(img);
+          }
+        }
+      }
+
+      // ✅ FIXED: Process audio files properly
+      const audioFileIds = [];
+      const allAudios = [...recordedVoiceFiles, ...uploadedVoiceFiles];
+      for (const audioFile of allAudios) {
+        if (audioFile instanceof File) {
+          const audioUrl = await uploadFileToBackend(audioFile, "subtopics/audios");
+          if (audioUrl) audioFileIds.push(audioUrl);
+        } else if (typeof audioFile === "string" && audioFile.startsWith("http")) {
+          audioFileIds.push(audioFile);
+        }
+      }
+
       // Final payload expected by your backend (WrapperUnit)
       const updatedData = {
         dbname: courseName,
@@ -1948,8 +1966,8 @@ const AdminRight = () => {
         rootId: firstClicked, // the root document id
         unitName: subTitle,
         explanation: subDesc,
-        audioFileId: selectedSubTopicUnitAudio || [],
-        imageUrls: currentQuestion?.image || selectedSubTopicUnit?.imageUrls || [],
+        audioFileId: audioFileIds.length > 0 ? audioFileIds : selectedSubTopicUnitAudio || [],
+        imageUrls: imageUrls, // ✅ FIXED: Use processed images
       };
 
       console.log("Updating subtopic payload:", updatedData);
@@ -1967,15 +1985,15 @@ const AdminRight = () => {
       if (data.status === "updated") {
         alert("Subtopic updated successfully");
 
-        // Update local state immediately
+        // ✅ FIXED: Update local state with processed data
         if (editingSubtopicIndex !== null && selectedUnit && lessonSubtopicsMap[selectedUnit]) {
           const updatedSubtopics = [...lessonSubtopicsMap[selectedUnit]];
           updatedSubtopics[editingSubtopicIndex] = {
             ...updatedSubtopics[editingSubtopicIndex],
             unitName: subTitle,
             explanation: subDesc,
-            imageUrls: currentQuestion?.image || updatedSubtopics[editingSubtopicIndex].imageUrls,
-            audioFileId: selectedSubTopicUnitAudio || updatedSubtopics[editingSubtopicIndex].audioFileId,
+            imageUrls: imageUrls, // ✅ Use the processed image URLs
+            audioFileId: audioFileIds.length > 0 ? audioFileIds : selectedSubTopicUnitAudio,
           };
 
           setLessonSubtopicsMap(prev => ({
@@ -1987,6 +2005,7 @@ const AdminRight = () => {
         getAllData(); // refresh list
         setEditSelecetedSubUnit("");
         setShowExplanationForm(false);
+        setSubtopicImages([]); // ✅ Clear image state
       } else {
         alert("Failed to update subtopic");
       }
@@ -3296,7 +3315,7 @@ const AdminRight = () => {
                     cursor: "pointer",
                   }}
                 >
-                  ➕ Add Description
+                  ➕ Add Images
                 </button>
                 {/* ✅ Hidden input for multiple images */}
                 <input
@@ -3307,15 +3326,14 @@ const AdminRight = () => {
                   style={{ display: "none" }}
                   onChange={(e) => {
                     const files = Array.from(e.target.files);
-                    setCurrentQuestion((q) => ({
-                      ...q,
-                      image: [...(q.image || []), ...files], // append selected images
-                    }));
+                    // ✅ FIXED: Use subtopicImages state instead of currentQuestion
+                    setSubtopicImages(prev => [...prev, ...files]);
                     e.target.value = ""; // reset so user can re-select same files
                   }}
                 />
                 {/* ✅ Preview selected images */}
-                {currentQuestion.image && currentQuestion.image.length > 0 && (
+                {/* ✅ FIXED: Use subtopicImages instead of currentQuestion.image */}
+                {subtopicImages && subtopicImages.length > 0 && (
                   <div
                     style={{
                       display: "flex",
@@ -3324,22 +3342,7 @@ const AdminRight = () => {
                       marginTop: "10px",
                     }}
                   >
-                    {currentQuestion.image.map((img, idx) => {
-                      // Safe URL function
-                      const getSafeImageUrl = (image) => {
-                        if (!image) return null;
-                        if (typeof image === "string") return image;
-                        if (image instanceof File || image instanceof Blob) {
-                          try {
-                            return URL.createObjectURL(image);
-                          } catch (error) {
-                            console.warn("Failed to create object URL:", error);
-                            return null;
-                          }
-                        }
-                        return null;
-                      };
-
+                    {subtopicImages.map((img, idx) => {
                       const imgSrc = getSafeImageUrl(img);
 
                       return imgSrc ? (
@@ -3354,10 +3357,8 @@ const AdminRight = () => {
                           <button
                             type="button"
                             onClick={() =>
-                              setCurrentQuestion((q) => ({
-                                ...q,
-                                image: q.image.filter((_, i) => i !== idx),
-                              }))
+                              // ✅ FIXED: Remove from subtopicImages instead of currentQuestion
+                              setSubtopicImages(prev => prev.filter((_, i) => i !== idx))
                             }
                             style={{
                               position: "absolute",
